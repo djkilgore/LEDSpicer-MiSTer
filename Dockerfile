@@ -60,6 +60,7 @@ RUN cd LEDSpicer/build && \
     cmake .. \
         -DCMAKE_INSTALL_PREFIX=staging \
         -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+        -DCMAKE_INSTALL_DATADIR=/usr/share \
         -DCMAKE_CXX_FLAGS='-g0 -O3' \
         -DCMAKE_TOOLCHAIN_FILE=$PWD/toolchain-armv7.cmake \
         -DENABLE_LEDWIZ32=ON \
@@ -74,6 +75,6 @@ RUN cp /usr/lib/arm-linux-gnueabihf/libasound.so.2 /root/LEDSpicer/build/staging
 
 # Package LEDSpicer/build directory contents into tar.gz
 RUN mkdir -p /tmp/package/LEDSpicer && \
-    cp -r /root/LEDSpicer/* /tmp/package/LEDSpicer/ && \
+    cp -r /root/LEDSpicer/build/staging/* /tmp/package/LEDSpicer/ && \
     tar -czf /root/LEDSpicer.tar.gz -C /tmp/package LEDSpicer && \
     rm -rf /tmp/package
