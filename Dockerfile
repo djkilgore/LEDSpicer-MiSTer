@@ -1,10 +1,28 @@
-FROM ubuntu:20.04
+# Pin to amd64: this is a cross-compile to armhf, so the build host arch
+# must not change which apt mirrors are used (see sources.list below).
+# Use an ARG (not a literal) so the linter is happy and it stays overridable.
+ARG BUILD_PLATFORM=linux/amd64
+FROM --platform=${BUILD_PLATFORM} ubuntu:20.04
 
 # Set environment variable to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Add armhf architecture for cross-compilation
 RUN dpkg --add-architecture armhf
+
+# armhf packages are NOT on archive.ubuntu.com (amd64/i386 only) -- they live
+# on ports.ubuntu.com. Without this split, `apt-get update` 404s on the armhf
+# package indexes. Restrict the default mirrors to amd64 and add ports for armhf.
+RUN printf '%s\n' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal main restricted universe multiverse' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal-updates main restricted universe multiverse' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal-backports main restricted universe multiverse' \
+    'deb [arch=amd64] http://security.ubuntu.com/ubuntu/ focal-security main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-updates main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-backports main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-security main restricted universe multiverse' \
+    > /etc/apt/sources.list
 
 # Update package list and install required packages
 RUN apt-get update && apt-get install -y \
@@ -47,7 +65,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /root
 
 # Clone LEDSpicer from GitHub
-RUN git clone https://github.com/meduzapat/LEDSpicer.git && cd LEDSpicer && git checkout master
+# Pinned to a specific upstream commit for reproducible builds.
+# To update: bump LEDSPICER_REF to a newer commit/tag from
+# https://github.com/meduzapat/LEDSpicer
+ARG LEDSPICER_REF=6ae9c17ae4cd6d40b77c5a483be1d12bde9b6c64
+RUN git clone https://github.com/meduzapat/LEDSpicer.git && \
+    cd LEDSpicer && git checkout "$LEDSPICER_REF"
 
 # Remove PulseAudio.cpp line from CMakeLists.txt (I cant get it to compile and its not supported on MiSTer anyways)
 RUN sed -i '/src\/animations\/PulseAudio\.cpp/d' LEDSpicer/CMakeLists.txt
