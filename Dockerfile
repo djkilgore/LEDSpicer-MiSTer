@@ -1,10 +1,26 @@
-FROM ubuntu:20.04
+# Pin to amd64: this is a cross-compile to armhf, so the build host arch
+# must not change which apt mirrors are used (see sources.list below).
+FROM --platform=linux/amd64 ubuntu:20.04
 
 # Set environment variable to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Add armhf architecture for cross-compilation
 RUN dpkg --add-architecture armhf
+
+# armhf packages are NOT on archive.ubuntu.com (amd64/i386 only) -- they live
+# on ports.ubuntu.com. Without this split, `apt-get update` 404s on the armhf
+# package indexes. Restrict the default mirrors to amd64 and add ports for armhf.
+RUN printf '%s\n' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal main restricted universe multiverse' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal-updates main restricted universe multiverse' \
+    'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ focal-backports main restricted universe multiverse' \
+    'deb [arch=amd64] http://security.ubuntu.com/ubuntu/ focal-security main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-updates main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-backports main restricted universe multiverse' \
+    'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ focal-security main restricted universe multiverse' \
+    > /etc/apt/sources.list
 
 # Update package list and install required packages
 RUN apt-get update && apt-get install -y \
