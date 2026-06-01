@@ -47,7 +47,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /root
 
 # Clone LEDSpicer from GitHub
-RUN git clone https://github.com/meduzapat/LEDSpicer.git && cd LEDSpicer && git checkout master
+# Pinned to a specific upstream commit for reproducible builds.
+# To update: bump LEDSPICER_REF to a newer commit/tag from
+# https://github.com/meduzapat/LEDSpicer
+ARG LEDSPICER_REF=6ae9c17ae4cd6d40b77c5a483be1d12bde9b6c64
+RUN git clone https://github.com/meduzapat/LEDSpicer.git && \
+    cd LEDSpicer && git checkout "$LEDSPICER_REF"
 
 # Remove PulseAudio.cpp line from CMakeLists.txt (I cant get it to compile and its not supported on MiSTer anyways)
 RUN sed -i '/src\/animations\/PulseAudio\.cpp/d' LEDSpicer/CMakeLists.txt
