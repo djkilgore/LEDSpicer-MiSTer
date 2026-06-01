@@ -1,6 +1,8 @@
 # Pin to amd64: this is a cross-compile to armhf, so the build host arch
 # must not change which apt mirrors are used (see sources.list below).
-FROM --platform=linux/amd64 ubuntu:20.04
+# Use an ARG (not a literal) so the linter is happy and it stays overridable.
+ARG BUILD_PLATFORM=linux/amd64
+FROM --platform=${BUILD_PLATFORM} ubuntu:20.04
 
 # Set environment variable to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
