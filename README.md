@@ -21,6 +21,7 @@ Pinned upstream: **LEDSpicer 0.7.7** (`LEDSPICER_REF` in the Dockerfile).
 - `docker-compose.yml` - Docker Compose configuration
 - `toolchain-armv7.cmake` - CMake toolchain file for ARM cross-compilation
 - `mister/` - Starter configuration and helper scripts shipped inside the tarball (see Installing on MiSTer)
+- `patches/` - Source patches applied to upstream before building (see Patches)
 - `.github/workflows/build.yml` - CI: builds the image and publishes `LEDSpicer.tar.gz` as an artifact (and as a release on `v*` tags)
 
 ## Building the Image
@@ -46,7 +47,7 @@ The Dockerfile:
 1. Sets up an Ubuntu 20.04 (amd64) base image. Its glibc 2.31 matches the MiSTer Linux image, so the binaries run there unmodified.
 2. Adds ARM hard-float (armhf) architecture support (packages come from ports.ubuntu.com)
 3. Installs build tools, the `arm-linux-gnueabihf` cross toolchain and the armhf development libraries (libusb, libtinyxml2, libasound2)
-4. Clones LEDSpicer and checks out the pinned `LEDSPICER_REF`
+4. Clones LEDSpicer and checks out the pinned `LEDSPICER_REF`, then applies `patches/*.patch` (see Patches)
 5. Patches the LED-Wiz inter-packet wait from 1 ms to 10 ms (`LEDWIZ_WAIT_US`, see "LED-Wiz timing")
 6. Builds with CMake using the ARM toolchain and these options:
    - `-DCMAKE_INSTALL_PREFIX=/media/fat/linux/LEDSpicer` (also sets the data and devices dirs)
@@ -127,6 +128,22 @@ If the board does get stuck, `share/doc/ledspicer/examples/mister/restart-ledspi
 ### Starter configuration
 
 `mister/ledspicer.conf` defines one LedWiz32 board with 32 single-colour elements named `Out1`..`Out32`, and `mister/profiles/default.xml` turns them all on. Rename the elements to match your panel wiring, add groups and animations, and keep everything under `/media/fat/linux/LEDSpicer`. Configuration files use data format version `1.1`; see the [LEDSpicer wiki](https://github.com/meduzapat/LEDSpicer/wiki) for the full syntax.
+
+### Per-game lighting (processLookup and emitter)
+
+`processLookup` watches the MiSTer process and, whenever a core or arcade game starts, runs `emitter LoadProfileByEmulator <set> <system>`. The daemon then looks for a profile, in order:
+
+- Arcade cores: the MRA's `<setname>` is looked up in `share/ledspicer/gameData.xml` (set `craftProfile="True"` and `dataSource="file"` on the config root). The daemon crafts a profile on top of `profiles/profile_arcade.xml`, lighting elements named by the LEDSpicer convention: `P1_BUTTON1`..`P1_BUTTONn`, `P1_JOYSTICK1`, `P1_TRACKBALL1`, `P2_...`. It also loads animations named after the game's groups if they exist (`1_PLAYERS`, `2_PLAYERS`, `PLAYER1`, `2_COINS`, ...), which is a convenient place to light the start buttons. Games missing from the database fall back to `profiles/arcade.xml`.
+- Other cores: `profiles/<Core>.xml`, where `<Core>` is the RBF filename up to the first underscore (`NES_20260823.rbf` loads `NES.xml`).
+- Leaving a core restores the previous profile.
+
+`gameData.xml` is not in the upstream tarball; take it from the `resources` branch of the upstream repository (`data/gameData.xml`, about 10,900 MAME sets) and put it in `share/ledspicer/`.
+
+## Patches
+
+Files in `patches/` are applied to the upstream checkout with `git apply` before building, and a patch that no longer applies fails the build. Current patches:
+
+- `0001-processlookup-mister-pid-and-menu-path.patch`: current MiSTer firmware re-executes the main binary on every core load, so its PID changes; upstream `processLookup` threw "cannot find MiSTer" and aborted at the first core switch. The patch re-finds the process instead. It also recognises the menu by basename, since the firmware now passes `/media/fat/menu.rbf` rather than `menu.rbf`.
 
 ## Customization
 

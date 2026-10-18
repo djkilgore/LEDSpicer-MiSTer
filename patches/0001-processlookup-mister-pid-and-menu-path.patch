@@ -1,0 +1,57 @@
+diff --git a/src/ProcessLookup.cpp b/src/ProcessLookup.cpp
+index 821c0b2..1101917 100644
+--- a/src/ProcessLookup.cpp
++++ b/src/ProcessLookup.cpp
+@@ -52,6 +52,9 @@ void callEmitter(const string& rom, const string& system = "") {
+ 
+ string lastRunning = "";
+ 
++// Defined below; needed by checkIfProcessIsRunning() to re-locate MiSTer.
++void findRunningProcess();
++
+ /*
+  * MiSTer FPGA runs a process to control the menu and the load of cores.
+  * That control is always there, it only changes the parameters.
+@@ -83,8 +86,20 @@ void checkIfProcessIsRunning() {
+ 	string data = PROC_DIRECTORY + currentMap->id + CMDLINE;
+ 	std::ifstream cmdFile;
+ 	cmdFile.open(data.c_str(), std::ios::in);
+-	if (not cmdFile.is_open())
+-		throw Error("cannot find " MISTER_BINARY);
++	if (not cmdFile.is_open()) {
++		// Current MiSTer firmware re-executes the main binary on every core
++		// load, so its PID changes. Look it up again instead of giving up.
++		LogDebug(MISTER_BINARY " process " + currentMap->id + " is gone, searching again");
++		currentMap->id = "";
++		findRunningProcess();
++		if (currentMap->id.empty())
++			throw Error("cannot find " MISTER_BINARY);
++		LogDebug("Found " MISTER_BINARY " with ID " + currentMap->id);
++		data = PROC_DIRECTORY + currentMap->id + CMDLINE;
++		cmdFile.open(data.c_str(), std::ios::in);
++		if (not cmdFile.is_open())
++			throw Error("cannot find " MISTER_BINARY);
++	}
+ 	std::getline(cmdFile, data);
+ 	cmdFile.close();
+ 
+@@ -107,7 +122,7 @@ void checkIfProcessIsRunning() {
+ 		currentMap->parameterPos = 0;
+ 
+ 		// Is back to menu?
+-		if (parts.size() > 1 and parts.at(1) == "menu.rbf") {
++		if (parts.size() > 1 and Utility::explode(parts.at(1), '/').back() == "menu.rbf") {
+ 			LogDebug("Core ended");
+ 			lastRunning = "";
+ 			return;
+@@ -128,8 +143,8 @@ void checkIfProcessIsRunning() {
+ 	 * 3 arcade
+ 	 */
+ 	case 2:
+-		// Detect menu.
+-		if (parts.at(1) == "menu.rbf")
++		// Detect menu (passed as a full path by current firmware).
++		if (Utility::explode(parts.at(1), '/').back() == "menu.rbf")
+ 			return;
+ 		// detect name
+ 		parts = Utility::explode(parts[1], '/');

@@ -73,6 +73,13 @@ ARG LEDSPICER_REF=5c59d19ad48aa9782b0602e1eb4f44b7d14ebcc8
 RUN git clone https://github.com/meduzapat/LEDSpicer.git && \
     cd LEDSpicer && git checkout "$LEDSPICER_REF"
 
+# Apply local patches to upstream. Each patch is MiSTer-specific behaviour that
+# upstream does not have yet; `git apply` fails loudly if a bump breaks one.
+#   0001: processLookup re-finds MiSTer's PID (current firmware re-executes the
+#         binary on every core load) and recognises menu.rbf by basename.
+COPY patches/ /root/patches/
+RUN cd LEDSpicer && for p in /root/patches/*.patch; do echo "Applying $p" && git apply --verbose "$p"; done
+
 # Slow down LED-Wiz USB writes. Upstream waits 1 ms between the four 8-byte
 # packets of each frame; the LED-Wiz firmware drops data or hangs when fed that
 # fast on current MiSTer kernels (panel stays dark, or the board locks up until
