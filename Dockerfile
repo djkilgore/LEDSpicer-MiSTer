@@ -68,36 +68,59 @@ WORKDIR /root
 # Pinned to a specific upstream commit for reproducible builds.
 # To update: bump LEDSPICER_REF to a newer commit/tag from
 # https://github.com/meduzapat/LEDSpicer
-ARG LEDSPICER_REF=6ae9c17ae4cd6d40b77c5a483be1d12bde9b6c64
+# Current pin: 0.7.7 (master as of 2026-10).
+ARG LEDSPICER_REF=5c59d19ad48aa9782b0602e1eb4f44b7d14ebcc8
 RUN git clone https://github.com/meduzapat/LEDSpicer.git && \
     cd LEDSpicer && git checkout "$LEDSPICER_REF"
 
-# Remove PulseAudio.cpp line from CMakeLists.txt (I cant get it to compile and its not supported on MiSTer anyways)
-RUN sed -i '/src\/animations\/PulseAudio\.cpp/d' LEDSpicer/CMakeLists.txt
+# Slow down LED-Wiz USB writes. Upstream waits 1 ms between the four 8-byte
+# packets of each frame; the LED-Wiz firmware drops data or hangs when fed that
+# fast on current MiSTer kernels (panel stays dark, or the board locks up until
+# power-cycled). 10 ms is comfortably safe. The grep makes the build fail loudly
+# if upstream renames the constant.
+ARG LEDWIZ_WAIT_US=10000
+RUN grep -q '#define LEDWIZ_WAIT *1000 ' LEDSpicer/src/devices/GroovyGameGear/LedWiz32.hpp && \
+    sed -i "s/#define LEDWIZ_WAIT *1000 /#define LEDWIZ_WAIT            ${LEDWIZ_WAIT_US} /" \
+        LEDSpicer/src/devices/GroovyGameGear/LedWiz32.hpp && \
+    grep 'define LEDWIZ_WAIT' LEDSpicer/src/devices/GroovyGameGear/LedWiz32.hpp
 
 # Copy toolchain-armv7.cmake file to LEDSpicer build directory
 COPY toolchain-armv7.cmake LEDSpicer/build/toolchain-armv7.cmake
 
-# Build LEDSpicer
+# Everything is installed under one directory on the MiSTer SD card. The
+# MiSTer root filesystem (linux.img) is mounted read-only and replaced
+# wholesale by MiSTer updates, so config, data and plugins must not live in
+# /etc or /usr. These paths are compiled into the binaries (config file,
+# data dir, devices dir) and used as the shared-library RPATH, so no
+# LD_LIBRARY_PATH or -c flag is needed at runtime.
+ARG MISTER_PREFIX=/media/fat/linux/LEDSpicer
+
+# Build LEDSpicer and install it into a staging root (DESTDIR).
+# ALSA is enabled explicitly: upstream flipped its default to OFF in 0.7.7.
 RUN cd LEDSpicer/build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=staging \
-        -DCMAKE_INSTALL_SYSCONFDIR=/etc \
-        -DCMAKE_INSTALL_DATADIR=/usr/share \
+        -DCMAKE_INSTALL_PREFIX="$MISTER_PREFIX" \
+        -DCMAKE_INSTALL_SYSCONFDIR="$MISTER_PREFIX/etc" \
+        -DCMAKE_INSTALL_RPATH="$MISTER_PREFIX/lib" \
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
         -DCMAKE_CXX_FLAGS='-g0 -O3' \
         -DCMAKE_TOOLCHAIN_FILE=$PWD/toolchain-armv7.cmake \
         -DENABLE_LEDWIZ32=ON \
         -DENABLE_MISTER=ON \
+        -DENABLE_ALSAAUDIO=ON \
         -DENABLE_PULSEAUDIO=OFF && \
     make -j$(nproc) && \
-    make install
+    make install DESTDIR=/tmp/pkgroot
 
-# Copy Libraries
-RUN cp /usr/lib/arm-linux-gnueabihf/libtinyxml2.so.6 /root/LEDSpicer/build/staging/lib/libtinyxml2.so.6
-RUN cp /usr/lib/arm-linux-gnueabihf/libasound.so.2 /root/LEDSpicer/build/staging/lib/libasound.so.2
+# Bundle runtime libraries the MiSTer Linux image does not ship.
+RUN cp /usr/lib/arm-linux-gnueabihf/libtinyxml2.so.6 "/tmp/pkgroot$MISTER_PREFIX/lib/" && \
+    cp /usr/lib/arm-linux-gnueabihf/libasound.so.2 "/tmp/pkgroot$MISTER_PREFIX/lib/"
 
-# Package LEDSpicer/build directory contents into tar.gz
-RUN mkdir -p /tmp/package/LEDSpicer && \
-    cp -r /root/LEDSpicer/build/staging/* /tmp/package/LEDSpicer/ && \
-    tar -czf /root/LEDSpicer.tar.gz -C /tmp/package LEDSpicer && \
-    rm -rf /tmp/package
+# MiSTer starter configuration (LED-Wiz 32, all outputs on). Shipped under
+# examples so re-extracting a newer tarball never clobbers a tuned config.
+COPY mister/ /tmp/pkgroot${MISTER_PREFIX}/share/doc/ledspicer/examples/mister/
+
+# Package: extracting LEDSpicer.tar.gz in /media/fat/linux/ yields
+# /media/fat/linux/LEDSpicer/{bin,lib,share}.
+RUN tar -czf /root/LEDSpicer.tar.gz -C /tmp/pkgroot/media/fat/linux LEDSpicer && \
+    rm -rf /tmp/pkgroot
