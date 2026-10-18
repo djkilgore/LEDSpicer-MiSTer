@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Colour palette referenced by ledspicer.conf (colors="basicColors").
+  Install once: cp to /media/fat/linux/LEDSpicer/share/ledspicer/basicColors.xml
+  "On", "Off" and "Random" are built-in pseudo colours.
+-->
+<LEDSpicer
+	version="1.1"
+	type="Colors"
+	format="hex"
+>
+	<color name="White"   color="FFFFFF" />
+	<color name="Red"     color="FF0000" />
+	<color name="Green"   color="00FF00" />
+	<color name="Blue"    color="0000FF" />
+	<color name="Yellow"  color="FFFF00" />
+	<color name="Cyan"    color="00FFFF" />
+	<color name="Magenta" color="FF00FF" />
+	<color name="Orange"  color="FF8000" />
+	<color name="Purple"  color="8000FF" />
+	<color name="Pink"    color="FF80C0" />
+	<color name="Black"   color="000000" />
+</LEDSpicer>
