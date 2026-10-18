@@ -5,6 +5,10 @@
 
 LS=/media/fat/linux/LEDSpicer
 
+# processLookup starts emitter by name through the shell, so the LEDSpicer
+# bin directory must be on PATH.
+export PATH="$PATH:/media/fat/linux/LEDSpicer/bin"
+
 echo "Stopping ledspicerd and processLookup..."
 for p in $(ps -ef | grep -E "ledspicerd|processLookup" | grep -v grep | awk '{print $1}'); do
 	kill "$p" 2>/dev/null
